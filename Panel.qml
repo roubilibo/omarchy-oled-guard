@@ -3,28 +3,17 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "GuardModel.js" as GuardModel
 
-// Bar indicator plus its dropdown.
-//
-// This is the one file that imports omarchy's `qs.*` UI module. That is a
-// deliberate, contained bet: a dropdown built by hand would look foreign next
-// to every other panel, and the alternative -- making people hand-edit
-// shell.json to change protection level -- is a worse interface than no
-// interface. The service and the overlay stay dependency-free, so if a future
-// omarchy moves this module the indicator is what breaks, never the guarding.
 Panel {
     id: root
-    // The manifest is injected by omarchy-shell. Keep a fallback so this
-    // file remains usable when previewed outside the plugin loader.
+    // The manifest supplies the custom plugin ID.
     property var manifest: null
     readonly property string pluginId: manifest && manifest.id
         ? String(manifest.id) : "roubilibo.oled-guard"
 
     moduleName: root.pluginId
     ipcTarget: root.pluginId
-    // Own the target so the panel's own verbs can share it with the base
-    // open/close set -- one IpcHandler per target is the limit. Being
-    // scriptable also means these choices can go on a keybinding.
     manageIpc: false
 
     readonly property var service: {
@@ -37,9 +26,7 @@ Panel {
         return null
     }
 
-    // The service is the live, normalized view of the entry. Prefer it over
-    // the bar's injected startup snapshot so the panel cannot display an old
-    // preset while the overlay is already using the new one.
+    // Prefer the live service snapshot over the injected bar settings.
     function guardSetting(name, fallback) {
         var live = service ? service.config : null
         if (live && live[name] !== undefined && live[name] !== null)
@@ -62,22 +49,16 @@ Panel {
         return guardActive ? glyphGuarding : glyphStandby
     }
 
-    // Off is simply the bottom of the intensity scale, not a separate axis, so
-    // it shares the row rather than owning a section of its own.
     readonly property string levelValue: guardEnabled ? depthValue : "off"
     readonly property string powerValue: guardEnabled ? "on" : "off"
     readonly property string lookValue: guardChecker ? "checker" : "flat"
     readonly property bool guardReveal: guardSetting("revealOnHover", false) === true
     readonly property string revealValue: guardReveal ? "hover" : "always"
 
-    // Depth presets come from the same normalized snapshot as the service.
-    // Users can now tune every level in shell.json without editing this file.
     readonly property var defaultDepths: ({
         light: { baseOpacity: 0.10, idleOpacity: 0.40 },
         medium: { baseOpacity: 0.15, idleOpacity: 0.55 },
         deep: { baseOpacity: 0.25, idleOpacity: 0.75 },
-        // Only sensible with Reveal on hover. A bar you must read at a glance
-        // cannot sit here; a bar that clears when you reach for it can.
         veiled: { baseOpacity: 0.85, idleOpacity: 0.90 }
     })
     readonly property var depths: guardSetting("levels", defaultDepths)
@@ -131,21 +112,12 @@ Panel {
         return "standing by"
     }
 
-    // Write back through the widget's own shell.json entry, the same way the
-    // first-party clock persists a cycled format. Copy the existing keys so a
-    // hand-written option we do not surface here is not silently dropped.
-    //
-    // Both halves are required. Assigning `settings` only updates this live
-    // instance -- it is what makes the button move under the click. The
-    // updateEntryInline call is what reaches shell.json, and without it the
-    // choice silently reverts the next time the bar re-applies its config.
+    // Persist and apply one complete settings snapshot.
     function applySettings(patch) {
         var entry = { id: root.moduleName }
         for (var key in root.settings)
             if (key !== "id")
                 entry[key] = root.settings[key]
-        // Keep the service's normalized values authoritative when the host
-        // injected an older bar snapshot during shell startup.
         if (root.service && root.service.config) {
             for (var liveKey in root.service.config)
                 entry[liveKey] = root.service.config[liveKey]
@@ -153,9 +125,6 @@ Panel {
         for (var k in patch)
             entry[k] = patch[k]
 
-        // Use one complete snapshot for persistence and both live consumers.
-        // The service cannot observe the host's barConfig after startup, so
-        // sending the same entry explicitly keeps the transition atomic.
         var persisted = false
         if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
             persisted = root.bar.shell.updateEntryInline(root.moduleName, entry)
@@ -201,7 +170,6 @@ Panel {
         applySettings({ revealOnHover: value === "hover" })
     }
 
-    // Kept for scripts: one verb that sets both at once.
     function setMode(value) {
         if (value === "off") {
             setPower("off")
@@ -231,7 +199,6 @@ Panel {
         function hide(): void { root.close() }
         function toggle(): void { root.toggle() }
 
-        // off | dim | checker
         function mode(value: string): string {
             var v = String(value || "")
             if (v !== "off" && v !== "dim" && v !== "checker")
@@ -240,7 +207,6 @@ Panel {
             return v
         }
 
-        // light | medium | deep
         function depth(value: string): string {
             var v = String(value || "")
             if (!root.levelPreset(v))
@@ -249,7 +215,6 @@ Panel {
             return v
         }
 
-        // off | light | medium | deep | veiled
         function level(value: string): string {
             var v = String(value || "")
             if (v !== "off" && !root.levelPreset(v))
@@ -258,7 +223,6 @@ Panel {
             return v
         }
 
-        // always | hover
         function reveal(value: string): string {
             var v = String(value || "")
             if (v !== "always" && v !== "hover")
@@ -267,7 +231,6 @@ Panel {
             return v
         }
 
-        // flat | checker
         function look(value: string): string {
             var v = String(value || "")
             if (v !== "flat" && v !== "checker")
@@ -288,10 +251,6 @@ Panel {
         }
     }
 
-    // Ui.Panel is a bare Item with no sizing of its own, and the bar takes each
-    // slot's size straight from the widget's implicit size. Without these the
-    // slot is zero-wide: the panel still loads and still answers IPC, it just
-    // paints nothing and reads as a missing icon.
     implicitWidth: button.implicitWidth
     implicitHeight: button.implicitHeight
 
@@ -302,7 +261,6 @@ Panel {
         text: root.glyph
         tooltipText: "OLED Guard — " + root.stateLine + " (" + root.activeLevelTooltip + ")"
         onPressed: function (b) {
-            // Right click keeps the fast path: pause without opening anything.
             if (b === Qt.RightButton && root.service)
                 root.service.paused = !root.service.paused
             else

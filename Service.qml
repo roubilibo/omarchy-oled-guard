@@ -5,18 +5,6 @@ import Quickshell.Io
 import Quickshell.Wayland
 import "GuardModel.js" as GuardModel
 
-// OLED Guard.
-//
-// The premise: on an OLED panel, wear is luminance integrated over time, and
-// the status bar is the only surface that holds still for the entire session.
-// Every other pixel gets shuffled by window moves, scrolling and workspace
-// switches; the bar's clock, tray icons and workspace pills do not. Left alone
-// the strip simply ages faster than the panel around it.
-//
-// So the guard does one thing and reports on it honestly: hold a translucent
-// veil over that strip, deepen it when nobody is looking, lift it entirely
-// when there is fullscreen content underneath, and keep a running total of the
-// lit time it has actually clawed back.
 Item {
     id: root
 
@@ -25,10 +13,7 @@ Item {
     property string omarchyPath: ""
     property var manifest: null
 
-    // Third-party plugins receive Omarchy's scoped shell API. It exposes the
-    // bar configuration as `barConfig`, not the host's full `shellConfig`.
-    // Wrap it in the shape entryFor() expects so bar-widget settings reach the
-    // service too (including the Veiled 85% preset).
+    // Third-party plugins receive the bar configuration through barConfig.
     readonly property string pluginId: manifest && manifest.id
         ? String(manifest.id) : GuardModel.PLUGIN_ID
     property var config: GuardModel.normalize({})
@@ -43,9 +28,7 @@ Item {
         root.config = root.configFromHost()
     }
 
-    // FileView gives JSON edits the same live path as panel changes. Read the
-    // complete plugin entry first, then normalize it once; this prevents
-    // `level` and `levels` from being observed as separate half-updated values.
+    // Read and normalize one complete JSON entry.
     function syncConfigFromJson(raw) {
         var parsed = null
         try {
@@ -58,9 +41,6 @@ Item {
             root.applyConfig(entry)
     }
 
-    // The host's scoped barConfig is a startup snapshot. The paired bar widget
-    // sends the complete entry here whenever a setting changes, so the service
-    // and the widget switch together without requiring a shell restart.
     function applyConfig(entry) {
         root.config = GuardModel.normalize(entry || {})
     }
@@ -77,21 +57,13 @@ Item {
         onFileChanged: reload()
     }
 
-    // Runtime pause, driven by IPC or the bar widget. Deliberately not
-    // persisted: a pause is for "not right now", not for "forever" -- forever
-    // is `"enabled": false` in shell.json.
     property bool paused: false
 
     property bool idle: false
     property int phase: 0
 
-    // Bumped whenever something happened that could change a per-screen
-    // fullscreen verdict. Overlays reference it so their own bindings
-    // re-evaluate: `lastIpcObject` is refreshed in place by an async round
-    // trip, and a binding on it alone would not reliably re-run.
     property int hyprRevision: 0
 
-    // A lock surface covers the bar, so there is nothing worth veiling under it.
     readonly property bool locked: {
         try {
             var lock = shell && typeof shell.serviceFor === "function"
@@ -103,19 +75,12 @@ Item {
     }
     readonly property bool lit: !locked
 
-    // --------------------------------------------------------------- geometry
-    //
-    // Taken off the live bar rather than re-derived from hyprctl: the bar host
-    // already knows its own edge and thickness, and reading it here means a
-    // bar that resizes or moves drags the veil along with it for free.
     readonly property var barConfig: shell ? shell.barConfig : null
     readonly property string edge: GuardModel.edgeFor(barConfig)
     readonly property int barThickness: shell && shell.bar && shell.bar.barSize > 0 ? shell.bar.barSize : 26
     readonly property bool barHidden: shell && shell.bar ? !!shell.bar.barHidden : false
 
-    // Omarchy's third-party bar API does not expose the host bar's hover state.
-    // Probe the global cursor against each live monitor's bar rectangle instead.
-    // The overlay still has an empty input region, so it cannot intercept clicks.
+    // The scoped bar API has no hover state; use the global cursor position.
     property bool pointerOnBar: false
     readonly property bool barHovered: pointerOnBar
 
@@ -177,10 +142,6 @@ Item {
         onTriggered: if (!cursorProbe.running) cursorProbe.running = true
     }
 
-    // ------------------------------------------------------------ attenuation
-    //
-    // Screen-independent part only. Fullscreen is resolved per overlay, since
-    // it is a per-monitor fact.
     readonly property real attenuation: GuardModel.attenuationFor({
         enabled: safeConfig.enabled,
         paused: root.paused,
@@ -194,8 +155,6 @@ Item {
         idleOpacity: safeConfig.idleOpacity
     })
 
-    // What the panel receives on average, once checkerboard's alpha ceiling is
-    // taken into account. This is the figure that gets reported and banked.
     readonly property real deliveredAttenuation: GuardModel.effectiveAttenuation(
         root.attenuation, safeConfig.checkerboard, safeConfig.checkerContrast)
 
@@ -206,11 +165,6 @@ Item {
             enabled: safeConfig.enabled,
             paused: root.paused,
             active: root.active,
-            // requested is what the config asked for; delivered is what the
-            // panel gets. Equal by construction now that the checker sits on a
-            // floor rather than carrying the whole attenuation itself, but both
-            // are reported so a future mode that cannot hit its target has
-            // somewhere honest to say so.
             attenuation: Math.round(root.deliveredAttenuation * 100) / 100,
             requestedAttenuation: Math.round(root.attenuation * 100) / 100,
             mode: safeConfig.checkerboard ? "checkerboard" : "dim",
@@ -225,10 +179,6 @@ Item {
         }
     }
 
-    // ------------------------------------------------------------- fullscreen
-    //
-    // Only for `status` and the bar tooltip: it reports the focused screen.
-    // The veil decision is made per overlay, against its own screen.
     readonly property bool fullscreen: {
         hyprRevision // re-evaluate when the workspace payload is refreshed
         try {
@@ -241,9 +191,6 @@ Item {
     }
 
     Connections {
-        // No ignoreUnknownSignals: if a future Quickshell renames these, the
-        // failure should be loud rather than silently disabling fullscreen
-        // detection and leaving the veil over somebody's film.
         target: Hyprland
 
         function onFocusedWorkspaceChanged() {
@@ -251,8 +198,6 @@ Item {
         }
 
         function onRawEvent(event) {
-            // Cheap filter: only the events that can flip fullscreen state are
-            // worth a refresh, and this fires on every Hyprland event.
             var name = ""
             try {
                 name = String(event.name || "")
@@ -265,9 +210,6 @@ Item {
                     || name === "monitorremoved") {
                 Hyprland.refreshWorkspaces()
                 Hyprland.refreshMonitors()
-                // refreshWorkspaces is an async round trip, so bumping here
-                // only covers the pre-refresh read; the settle timer below
-                // catches the state the refresh actually returned.
                 root.hyprRevision++
                 hyprSettleTimer.restart()
             }
@@ -281,11 +223,7 @@ Item {
         onTriggered: root.hyprRevision++
     }
 
-    // ------------------------------------------------------------------- idle
-    // Idle is bar-local: activity elsewhere on the desktop does not reset this
-    // timer. Passing the mouse over the bar starts the working state; after the
-    // configured interval without the mouse crossing the bar, deeper idle
-    // attenuation applies.
+    // Idle is based on time away from the bar, not global input.
     Timer {
         id: barIdleTimer
         interval: Math.max(5, Number(root.safeConfig.idleAfterSeconds)) * 1000
@@ -299,8 +237,6 @@ Item {
     onPausedChanged: if (paused) root.idle = false
     onConfigChanged: root.idle = false
 
-    // Rotating the checkerboard phase is what stops the pattern itself from
-    // becoming the burn-in. Pointless in flat-dim mode, so it does not run.
     Timer {
         id: phaseTimer
         running: root.safeConfig.enabled && root.safeConfig.checkerboard
@@ -309,7 +245,6 @@ Item {
         onTriggered: root.phase = (root.phase + 1) % 2
     }
 
-    // ---------------------------------------------------------------- surface
     Variants {
         model: Quickshell.screens
 
@@ -330,7 +265,6 @@ Item {
         }
     }
 
-    // -------------------------------------------------------------------- IPC
     IpcHandler {
         target: "oledguard"
 
