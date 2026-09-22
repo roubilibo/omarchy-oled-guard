@@ -70,10 +70,9 @@ Panel {
     readonly property bool guardReveal: guardSetting("revealOnHover", false) === true
     readonly property string revealValue: guardReveal ? "hover" : "always"
 
-    // Depth presets. Named rather than numeric because "how protected do you
-    // want to be" is the question people actually have; the opacities are an
-    // implementation detail they should not have to reason about.
-    readonly property var depths: ({
+    // Depth presets come from the same normalized snapshot as the service.
+    // Users can now tune every level in shell.json without editing this file.
+    readonly property var defaultDepths: ({
         light: { baseOpacity: 0.10, idleOpacity: 0.40 },
         medium: { baseOpacity: 0.15, idleOpacity: 0.55 },
         deep: { baseOpacity: 0.25, idleOpacity: 0.75 },
@@ -81,8 +80,29 @@ Panel {
         // cannot sit here; a bar that clears when you reach for it can.
         veiled: { baseOpacity: 0.85, idleOpacity: 0.90 }
     })
+    readonly property var depths: guardSetting("levels", defaultDepths)
+
+    function levelPreset(name) {
+        return depths && depths[name] ? depths[name] : defaultDepths[name]
+    }
+
+    function percent(value) {
+        return Math.round(Number(value) * 100) + "%"
+    }
+
+    function levelTooltip(name) {
+        var preset = levelPreset(name)
+        if (!preset)
+            return name
+        var text = percent(preset.baseOpacity) + " working, "
+            + percent(preset.idleOpacity) + " idle"
+        return name === "veiled" ? text + ". Needs Reveal on hover to stay usable." : text
+    }
 
     readonly property string depthValue: {
+        var configured = String(guardSetting("level", ""))
+        if (levelPreset(configured))
+            return configured
         var base = Number(guardSetting("baseOpacity", 0.15))
         if (base <= 0.12)
             return "light"
@@ -92,6 +112,8 @@ Panel {
             return "deep"
         return "veiled"
     }
+
+    readonly property string activeLevelTooltip: levelTooltip(depthValue)
 
     readonly property string stateLine: {
         if (!service)
@@ -158,10 +180,15 @@ Panel {
             applySettings({ enabled: false })
             return
         }
-        var preset = root.depths[value]
+        var preset = root.levelPreset(value)
         if (!preset)
             return
-        applySettings({ enabled: true, baseOpacity: preset.baseOpacity, idleOpacity: preset.idleOpacity })
+        applySettings({
+            enabled: true,
+            level: value,
+            baseOpacity: preset.baseOpacity,
+            idleOpacity: preset.idleOpacity
+        })
         if (root.service)
             root.service.paused = false
     }
@@ -186,9 +213,13 @@ Panel {
     }
 
     function setDepth(value) {
-        var preset = root.depths[value]
+        var preset = root.levelPreset(value)
         if (preset)
-            applySettings({ baseOpacity: preset.baseOpacity, idleOpacity: preset.idleOpacity })
+            applySettings({
+                level: value,
+                baseOpacity: preset.baseOpacity,
+                idleOpacity: preset.idleOpacity
+            })
     }
 
     IpcHandler {
@@ -212,7 +243,7 @@ Panel {
         // light | medium | deep
         function depth(value: string): string {
             var v = String(value || "")
-            if (!root.depths[v])
+            if (!root.levelPreset(v))
                 return "expected light|medium|deep"
             root.setDepth(v)
             return v
@@ -221,7 +252,7 @@ Panel {
         // off | light | medium | deep | veiled
         function level(value: string): string {
             var v = String(value || "")
-            if (v !== "off" && !root.depths[v])
+            if (v !== "off" && !root.levelPreset(v))
                 return "expected off|light|medium|deep|veiled"
             root.setLevel(v)
             return v
@@ -269,7 +300,7 @@ Panel {
         anchors.fill: parent
         bar: root.bar
         text: root.glyph
-        tooltipText: "OLED Guard — " + root.stateLine
+        tooltipText: "OLED Guard — " + root.stateLine + " (" + root.activeLevelTooltip + ")"
         onPressed: function (b) {
             // Right click keeps the fast path: pause without opening anything.
             if (b === Qt.RightButton && root.service)
@@ -343,10 +374,10 @@ Panel {
                     value: root.levelValue
                     options: [
                         { value: "off", label: "Off", tooltip: "No attenuation" },
-                        { value: "light", label: "Light", tooltip: "10% working, 40% idle" },
-                        { value: "medium", label: "Med", tooltip: "15% working, 55% idle" },
-                        { value: "deep", label: "Deep", tooltip: "25% working, 75% idle" },
-                        { value: "veiled", label: "Veil", tooltip: "85% working. Needs Reveal on hover to stay usable." }
+                        { value: "light", label: "Light", tooltip: root.levelTooltip("light") },
+                        { value: "medium", label: "Med", tooltip: root.levelTooltip("medium") },
+                        { value: "deep", label: "Deep", tooltip: root.levelTooltip("deep") },
+                        { value: "veiled", label: "Veil", tooltip: root.levelTooltip("veiled") }
                     ]
                     onChanged: function (value) { root.setLevel(value) }
                 }

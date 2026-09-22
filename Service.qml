@@ -43,6 +43,21 @@ Item {
         root.config = root.configFromHost()
     }
 
+    // FileView gives JSON edits the same live path as panel changes. Read the
+    // complete plugin entry first, then normalize it once; this prevents
+    // `level` and `levels` from being observed as separate half-updated values.
+    function syncConfigFromJson(raw) {
+        var parsed = null
+        try {
+            parsed = JSON.parse(String(raw || ""))
+        } catch (e) {
+            return
+        }
+        var entry = GuardModel.entryFor(parsed, root.pluginId)
+        if (entry)
+            root.applyConfig(entry)
+    }
+
     // The host's scoped barConfig is a startup snapshot. The paired bar widget
     // sends the complete entry here whenever a setting changes, so the service
     // and the widget switch together without requiring a shell restart.
@@ -53,9 +68,13 @@ Item {
     onShellChanged: root.syncConfigFromHost()
     onManifestChanged: root.syncConfigFromHost()
 
-    Connections {
-        target: root.shell
-        function onBarConfigChanged() { root.syncConfigFromHost() }
+    FileView {
+        id: userConfigFile
+        path: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
+        watchChanges: true
+        printErrors: false
+        onLoaded: root.syncConfigFromJson(text())
+        onFileChanged: reload()
     }
 
     // Runtime pause, driven by IPC or the bar widget. Deliberately not

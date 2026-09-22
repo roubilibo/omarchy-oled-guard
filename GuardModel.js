@@ -7,6 +7,15 @@
 
 var PLUGIN_ID = "roubilibo.oled-guard"
 
+var DEFAULT_LEVELS = {
+    light: { baseOpacity: 0.10, idleOpacity: 0.40 },
+    medium: { baseOpacity: 0.15, idleOpacity: 0.55 },
+    deep: { baseOpacity: 0.25, idleOpacity: 0.75 },
+    veiled: { baseOpacity: 0.85, idleOpacity: 0.90 }
+}
+
+var LEVEL_NAMES = ["light", "medium", "deep", "veiled"]
+
 var DEFAULTS = {
     enabled: true,
 
@@ -23,7 +32,7 @@ var DEFAULTS = {
     baseOpacity: 0.15,
 
     // Deeper attenuation once there has been no input for idleAfterSeconds.
-    idleOpacity: 0.5,
+    idleOpacity: 0.55,
     idleAfterSeconds: 90,
 
     // Asymmetric on purpose. Clearing the veil answers a gesture you just made,
@@ -86,6 +95,49 @@ function asBool(value, fallback) {
     return !!value
 }
 
+function normalizeLevels(raw) {
+    var source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
+    var levels = {}
+    for (var i = 0; i < LEVEL_NAMES.length; i++) {
+        var name = LEVEL_NAMES[i]
+        var fallback = DEFAULT_LEVELS[name]
+        var candidate = source[name] && typeof source[name] === "object"
+            ? source[name] : {}
+        levels[name] = {
+            baseOpacity: clamp(asNumber(candidate.baseOpacity, fallback.baseOpacity), 0, 0.9),
+            idleOpacity: clamp(asNumber(candidate.idleOpacity, fallback.idleOpacity), 0, 0.95)
+        }
+    }
+    return levels
+}
+
+function _levelDistance(level, baseOpacity, idleOpacity) {
+    var baseDelta = level.baseOpacity - baseOpacity
+    var idleDelta = level.idleOpacity - idleOpacity
+    return baseDelta * baseDelta + idleDelta * idleDelta
+}
+
+function inferLevel(baseOpacity, idleOpacity, levels) {
+    var base = asNumber(baseOpacity, DEFAULTS.baseOpacity)
+    var idle = asNumber(idleOpacity, DEFAULTS.idleOpacity)
+    var best = LEVEL_NAMES[0]
+    var distance = Infinity
+    for (var i = 0; i < LEVEL_NAMES.length; i++) {
+        var name = LEVEL_NAMES[i]
+        var candidateDistance = _levelDistance(levels[name], base, idle)
+        if (candidateDistance < distance) {
+            best = name
+            distance = candidateDistance
+        }
+    }
+    return best
+}
+
+function levelName(value, fallback) {
+    var name = String(value || "")
+    return LEVEL_NAMES.indexOf(name) === -1 ? fallback : name
+}
+
 function _findInList(list, wanted) {
     if (!list || !Array.isArray(list))
         return null
@@ -128,10 +180,22 @@ function entryFor(shellConfig, id) {
 
 function normalize(raw) {
     var src = raw || {}
+    var levels = normalizeLevels(src.levels)
+    var inferredLevel = inferLevel(src.baseOpacity, src.idleOpacity, levels)
+    var activeLevel = levelName(src.level, inferredLevel)
+    var selected = levels[activeLevel]
+    var hasExplicitLevel = src.level !== undefined && src.level !== null
     return {
         enabled: asBool(src.enabled, DEFAULTS.enabled),
-        baseOpacity: clamp(asNumber(src.baseOpacity, DEFAULTS.baseOpacity), 0, 0.9),
-        idleOpacity: clamp(asNumber(src.idleOpacity, DEFAULTS.idleOpacity), 0, 0.95),
+        level: activeLevel,
+        levels: levels,
+        // Once `level` is present, its preset is the single source of truth.
+        // The fallback keeps old configs that only contain base/idle values
+        // working during migration.
+        baseOpacity: hasExplicitLevel ? selected.baseOpacity
+            : clamp(asNumber(src.baseOpacity, selected.baseOpacity), 0, 0.9),
+        idleOpacity: hasExplicitLevel ? selected.idleOpacity
+            : clamp(asNumber(src.idleOpacity, selected.idleOpacity), 0, 0.95),
         idleAfterSeconds: Math.round(clamp(asNumber(src.idleAfterSeconds, DEFAULTS.idleAfterSeconds), 5, 3600)),
         fadeMs: Math.round(clamp(asNumber(src.fadeMs, DEFAULTS.fadeMs), 0, 10000)),
         revealMs: Math.round(clamp(asNumber(src.revealMs, DEFAULTS.revealMs), 0, 10000)),

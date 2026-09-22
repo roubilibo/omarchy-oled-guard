@@ -243,8 +243,15 @@ All keys are optional; the defaults below are what you get with an empty entry.
   "id": "roubilibo.oled-guard",
 
   "enabled": true,             // false disables without uninstalling
-  "baseOpacity": 0.15,         // 0.0-0.9  standing attenuation while active
-  "idleOpacity": 0.5,          // 0.0-0.95 attenuation after mouse inactivity
+  "level": "medium",           // active preset: light|medium|deep|veiled
+  "levels": {
+    "light":  { "baseOpacity": 0.10, "idleOpacity": 0.40 },
+    "medium": { "baseOpacity": 0.15, "idleOpacity": 0.55 },
+    "deep":   { "baseOpacity": 0.25, "idleOpacity": 0.75 },
+    "veiled": { "baseOpacity": 0.85, "idleOpacity": 0.90 }
+  },                           // edit these values to tune each preset
+  "baseOpacity": 0.15,         // resolved value; kept for old configs
+  "idleOpacity": 0.55,         // resolved value; `levels` wins when level exists
   "idleAfterSeconds": 90,      // 5-3600 seconds without mouse over the bar
   "fadeMs": 700,               // veiling back: gradual, so you never catch it
   "revealMs": 170,             // clearing: fast, it answers a gesture
@@ -266,10 +273,12 @@ to stop noticing, deepening to 55% after 90 seconds without the mouse passing ov
 attenuate the bar should do that on install rather than sit inert until
 configured. One click on **Off** in the panel stops it entirely.
 
-Changes made through the panel or the `omarchy-shell roubilibo.oled-guard ...` commands
-apply to the widget, service and `shell.json` together; no shell restart is
-needed. Editing the plugin's source still requires `omarchy restart shell`
-because plugin code is cached.
+Changes made through the panel, the `omarchy-shell roubilibo.oled-guard ...`
+commands, or a `levels` edit in `shell.json` are applied as one normalized
+snapshot to the widget, service and `shell.json`; no shell restart is needed.
+The panel tooltips read the live numbers from that same snapshot. Editing the
+plugin's source still requires `omarchy restart shell` because plugin code is
+cached.
 
 ## Bar indicator and panel
 
@@ -294,8 +303,9 @@ LOOK is a separate section on purpose. Sitting in the protection row, Checker
 read as a third and strongest setting — the opposite of true.
 
 Levels are presets rather than raw opacities, because "how protected do you want
-to be" is the question people actually have. Light is 10%/40%, Med 15%/55%,
-Deep 25%/75%, Veil 85%/90% — working and idle respectively.
+to be" is the question people actually have. Edit the four entries under
+`levels` in `shell.json`; the panel labels and tooltips update from those
+values. The percentages are working and idle respectively.
 
 Hiding the bar outright is still the theoretical maximum, and Omarchy already
 ships it at **Super + Ctrl + O → Menu Bar**. It is deliberately not duplicated
