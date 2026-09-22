@@ -14,8 +14,14 @@ import qs.Ui
 // omarchy moves this module the indicator is what breaks, never the guarding.
 Panel {
     id: root
-    moduleName: "oled.guard"
-    ipcTarget: "oled.guard"
+    // The manifest is injected by omarchy-shell. Keep a fallback so this
+    // file remains usable when previewed outside the plugin loader.
+    property var manifest: null
+    readonly property string pluginId: manifest && manifest.id
+        ? String(manifest.id) : "roubilibo.oled-guard"
+
+    moduleName: root.pluginId
+    ipcTarget: root.pluginId
     // Own the target so the panel's own verbs can share it with the base
     // open/close set -- one IpcHandler per target is the limit. Being
     // scriptable also means these choices can go on a keybinding.
@@ -24,15 +30,25 @@ Panel {
     readonly property var service: {
         try {
             if (bar && bar.shell && typeof bar.shell.serviceFor === "function")
-                return bar.shell.serviceFor("oled.guard")
+                return bar.shell.serviceFor(root.pluginId)
         } catch (e) {
             return null
         }
         return null
     }
 
-    readonly property bool guardEnabled: setting("enabled", true) !== false
-    readonly property bool guardChecker: setting("checkerboard", false) === true
+    // The service is the live, normalized view of the entry. Prefer it over
+    // the bar's injected startup snapshot so the panel cannot display an old
+    // preset while the overlay is already using the new one.
+    function guardSetting(name, fallback) {
+        var live = service ? service.config : null
+        if (live && live[name] !== undefined && live[name] !== null)
+            return live[name]
+        return setting(name, fallback)
+    }
+
+    readonly property bool guardEnabled: guardSetting("enabled", true) !== false
+    readonly property bool guardChecker: guardSetting("checkerboard", false) === true
     readonly property bool guardPaused: service ? !!service.paused : false
     readonly property bool guardActive: service ? !!service.active : false
 
@@ -51,7 +67,7 @@ Panel {
     readonly property string levelValue: guardEnabled ? depthValue : "off"
     readonly property string powerValue: guardEnabled ? "on" : "off"
     readonly property string lookValue: guardChecker ? "checker" : "flat"
-    readonly property bool guardReveal: setting("revealOnHover", false) === true
+    readonly property bool guardReveal: guardSetting("revealOnHover", false) === true
     readonly property string revealValue: guardReveal ? "hover" : "always"
 
     // Depth presets. Named rather than numeric because "how protected do you
@@ -67,7 +83,7 @@ Panel {
     })
 
     readonly property string depthValue: {
-        var base = Number(setting("baseOpacity", 0.15))
+        var base = Number(guardSetting("baseOpacity", 0.15))
         if (base <= 0.12)
             return "light"
         if (base <= 0.20)
@@ -106,6 +122,12 @@ Panel {
         for (var key in root.settings)
             if (key !== "id")
                 entry[key] = root.settings[key]
+        // Keep the service's normalized values authoritative when the host
+        // injected an older bar snapshot during shell startup.
+        if (root.service && root.service.config) {
+            for (var liveKey in root.service.config)
+                entry[liveKey] = root.service.config[liveKey]
+        }
         for (var k in patch)
             entry[k] = patch[k]
 

@@ -5,7 +5,7 @@
 // (what attenuation applies right now, how much wear that saved) can be
 // reasoned about without a running shell.
 
-var PLUGIN_ID = "oled.guard"
+var PLUGIN_ID = "roubilibo.oled-guard"
 
 var DEFAULTS = {
     enabled: true,

@@ -222,7 +222,7 @@ whichever entry exists — the `bar.layout` entry if you enabled the widget, or 
 ## Removing it
 
 ```bash
-omarchy plugin remove oled.guard
+omarchy plugin remove roubilibo.oled-guard
 ```
 
 That unloads the service, drops the veil immediately, and removes the bar entry
@@ -240,7 +240,7 @@ All keys are optional; the defaults below are what you get with an empty entry.
 
 ```jsonc
 {
-  "id": "oled.guard",
+  "id": "roubilibo.oled-guard",
 
   "enabled": true,             // false disables without uninstalling
   "baseOpacity": 0.15,         // 0.0-0.9  standing attenuation while active
@@ -266,7 +266,7 @@ to stop noticing, deepening to 55% after 90 seconds without the mouse passing ov
 attenuate the bar should do that on install rather than sit inert until
 configured. One click on **Off** in the panel stops it entirely.
 
-Changes made through the panel or the `omarchy-shell oled.guard ...` commands
+Changes made through the panel or the `omarchy-shell roubilibo.oled-guard ...` commands
 apply to the widget, service and `shell.json` together; no shell restart is
 needed. Editing the plugin's source still requires `omarchy restart shell`
 because plugin code is cached.
@@ -319,13 +319,13 @@ omarchy-shell oledguard toggle
 The panel exposes the same choices, so they can go on a keybinding:
 
 ```bash
-omarchy-shell oled.guard level off|light|medium|deep|veiled
-omarchy-shell oled.guard mode off|dim|checker   # sets power and look at once
-omarchy-shell oled.guard reveal always|hover
-omarchy-shell oled.guard look flat|checker
-omarchy-shell oled.guard depth light|medium|deep
-omarchy-shell oled.guard toggle   # open/close the panel
-omarchy-shell oled.guard state
+omarchy-shell roubilibo.oled-guard level off|light|medium|deep|veiled
+omarchy-shell roubilibo.oled-guard mode off|dim|checker   # sets power and look at once
+omarchy-shell roubilibo.oled-guard reveal always|hover
+omarchy-shell roubilibo.oled-guard look flat|checker
+omarchy-shell roubilibo.oled-guard depth light|medium|deep
+omarchy-shell roubilibo.oled-guard toggle   # open/close the panel
+omarchy-shell roubilibo.oled-guard state
 ```
 
 Pause is deliberately not persisted — it means "not right now". For "not ever",

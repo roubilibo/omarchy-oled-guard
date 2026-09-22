@@ -29,14 +29,33 @@ Item {
     // bar configuration as `barConfig`, not the host's full `shellConfig`.
     // Wrap it in the shape entryFor() expects so bar-widget settings reach the
     // service too (including the Veiled 85% preset).
-    property var config: GuardModel.normalize(
-        GuardModel.entryFor(shell ? { bar: shell.barConfig } : null, GuardModel.PLUGIN_ID))
+    readonly property string pluginId: manifest && manifest.id
+        ? String(manifest.id) : GuardModel.PLUGIN_ID
+    property var config: GuardModel.normalize({})
+    readonly property var safeConfig: root.config || GuardModel.normalize({})
+
+    function configFromHost() {
+        return GuardModel.normalize(
+            GuardModel.entryFor(shell ? { bar: shell.barConfig } : null, root.pluginId))
+    }
+
+    function syncConfigFromHost() {
+        root.config = root.configFromHost()
+    }
 
     // The host's scoped barConfig is a startup snapshot. The paired bar widget
     // sends the complete entry here whenever a setting changes, so the service
     // and the widget switch together without requiring a shell restart.
     function applyConfig(entry) {
         root.config = GuardModel.normalize(entry || {})
+    }
+
+    onShellChanged: root.syncConfigFromHost()
+    onManifestChanged: root.syncConfigFromHost()
+
+    Connections {
+        target: root.shell
+        function onBarConfigChanged() { root.syncConfigFromHost() }
     }
 
     // Runtime pause, driven by IPC or the bar widget. Deliberately not
@@ -135,7 +154,7 @@ Item {
         id: cursorPoll
         interval: 80
         repeat: true
-        running: root.config.enabled && root.config.revealOnHover && !root.paused
+        running: root.safeConfig.enabled && root.safeConfig.revealOnHover && !root.paused
         onTriggered: if (!cursorProbe.running) cursorProbe.running = true
     }
 
@@ -144,28 +163,28 @@ Item {
     // Screen-independent part only. Fullscreen is resolved per overlay, since
     // it is a per-monitor fact.
     readonly property real attenuation: GuardModel.attenuationFor({
-        enabled: config.enabled,
+        enabled: safeConfig.enabled,
         paused: root.paused,
         barHidden: root.barHidden,
         lit: root.lit,
         idle: root.idle,
         hovered: root.barHovered,
-        revealOnHover: config.revealOnHover,
-        hoverOpacity: config.hoverOpacity,
-        baseOpacity: config.baseOpacity,
-        idleOpacity: config.idleOpacity
+        revealOnHover: safeConfig.revealOnHover,
+        hoverOpacity: safeConfig.hoverOpacity,
+        baseOpacity: safeConfig.baseOpacity,
+        idleOpacity: safeConfig.idleOpacity
     })
 
     // What the panel receives on average, once checkerboard's alpha ceiling is
     // taken into account. This is the figure that gets reported and banked.
     readonly property real deliveredAttenuation: GuardModel.effectiveAttenuation(
-        root.attenuation, config.checkerboard, config.checkerContrast)
+        root.attenuation, safeConfig.checkerboard, safeConfig.checkerContrast)
 
     readonly property bool active: attenuation > 0
 
     function statusObject() {
         return {
-            enabled: config.enabled,
+            enabled: safeConfig.enabled,
             paused: root.paused,
             active: root.active,
             // requested is what the config asked for; delivered is what the
@@ -175,10 +194,10 @@ Item {
             // somewhere honest to say so.
             attenuation: Math.round(root.deliveredAttenuation * 100) / 100,
             requestedAttenuation: Math.round(root.attenuation * 100) / 100,
-            mode: config.checkerboard ? "checkerboard" : "dim",
+            mode: safeConfig.checkerboard ? "checkerboard" : "dim",
             idle: root.idle,
             hovered: root.barHovered,
-            revealOnHover: config.revealOnHover,
+            revealOnHover: safeConfig.revealOnHover,
             lit: root.lit,
             locked: root.locked,
             fullscreen: root.fullscreen,
@@ -250,9 +269,9 @@ Item {
     // attenuation applies.
     Timer {
         id: barIdleTimer
-        interval: Math.max(5, Number(root.config.idleAfterSeconds)) * 1000
+        interval: Math.max(5, Number(root.safeConfig.idleAfterSeconds)) * 1000
         repeat: false
-        running: root.config.enabled && !root.paused && !root.barHovered && !root.idle
+        running: root.safeConfig.enabled && !root.paused && !root.barHovered && !root.idle
         onTriggered: if (!root.barHovered) root.idle = true
     }
 
@@ -265,8 +284,8 @@ Item {
     // becoming the burn-in. Pointless in flat-dim mode, so it does not run.
     Timer {
         id: phaseTimer
-        running: root.config.enabled && root.config.checkerboard
-        interval: root.config.checkerPhaseMinutes * 60 * 1000
+        running: root.safeConfig.enabled && root.safeConfig.checkerboard
+        interval: root.safeConfig.checkerPhaseMinutes * 60 * 1000
         repeat: true
         onTriggered: root.phase = (root.phase + 1) % 2
     }
@@ -279,16 +298,16 @@ Item {
             edge: root.edge
             thickness: root.barThickness
             attenuation: root.attenuation
-            checkerboard: root.config.checkerboard
-            checkerContrast: root.config.checkerContrast
-            suspendOnFullscreen: root.config.suspendOnFullscreen
+            checkerboard: root.safeConfig.checkerboard
+            checkerContrast: root.safeConfig.checkerContrast
+            suspendOnFullscreen: root.safeConfig.suspendOnFullscreen
             hyprRevision: root.hyprRevision
             phaseX: GuardModel.phaseOffset(root.phase).x
             phaseY: GuardModel.phaseOffset(root.phase).y
-            fadeMs: root.config.fadeMs
-            revealMs: root.config.revealMs
+            fadeMs: root.safeConfig.fadeMs
+            revealMs: root.safeConfig.revealMs
             hovered: root.barHovered
-            revealOnHover: root.config.revealOnHover
+            revealOnHover: root.safeConfig.revealOnHover
         }
     }
 
