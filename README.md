@@ -6,6 +6,8 @@ when the pointer reaches the bar or fullscreen content is active.
 
 ![OLED Guard panel](preview.png)
 
+https://github.com/user-attachments/assets/f5d0a5c4-159d-4e98-a7a4-d4d4b6f55172
+
 ## Installation
 
 ```bash
