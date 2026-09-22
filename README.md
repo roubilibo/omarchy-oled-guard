@@ -5,6 +5,11 @@ out-wearing the rest of your OLED panel.
 
 ![OLED Guard panel](preview.png)
 
+
+https://github.com/user-attachments/assets/f5d0a5c4-159d-4e98-a7a4-d4d4b6f55172
+
+
+
 ## The problem
 
 OLED wear is luminance integrated over time. On a desktop, almost every pixel
