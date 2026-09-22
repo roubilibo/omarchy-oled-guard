@@ -25,8 +25,19 @@ Item {
     property string omarchyPath: ""
     property var manifest: null
 
-    readonly property var config: GuardModel.normalize(
-        GuardModel.entryFor(shell ? shell.shellConfig : null, GuardModel.PLUGIN_ID))
+    // Third-party plugins receive Omarchy's scoped shell API. It exposes the
+    // bar configuration as `barConfig`, not the host's full `shellConfig`.
+    // Wrap it in the shape entryFor() expects so bar-widget settings reach the
+    // service too (including the Veiled 85% preset).
+    property var config: GuardModel.normalize(
+        GuardModel.entryFor(shell ? { bar: shell.barConfig } : null, GuardModel.PLUGIN_ID))
+
+    // The host's scoped barConfig is a startup snapshot. The paired bar widget
+    // sends the complete entry here whenever a setting changes, so the service
+    // and the widget switch together without requiring a shell restart.
+    function applyConfig(entry) {
+        root.config = GuardModel.normalize(entry || {})
+    }
 
     // Runtime pause, driven by IPC or the bar widget. Deliberately not
     // persisted: a pause is for "not right now", not for "forever" -- forever
@@ -64,10 +75,69 @@ Item {
     readonly property int barThickness: shell && shell.bar && shell.bar.barSize > 0 ? shell.bar.barSize : 26
     readonly property bool barHidden: shell && shell.bar ? !!shell.bar.barHidden : false
 
-    // The bar tracks its own hover, and the overlay sits on top of it with an
-    // empty input region, so pointer events pass straight through and the bar
-    // still sees them. No polling, no input grab, no second hover surface.
-    readonly property bool barHovered: shell && shell.bar ? !!shell.bar.barHovered : false
+    // Omarchy's third-party bar API does not expose the host bar's hover state.
+    // Probe the global cursor against each live monitor's bar rectangle instead.
+    // The overlay still has an empty input region, so it cannot intercept clicks.
+    property bool pointerOnBar: false
+    readonly property bool barHovered: pointerOnBar
+
+    function cursorOnBar(x, y) {
+        var screens = Quickshell.screens
+        var thickness = Math.max(0, Number(root.barThickness))
+        var edge = root.edge
+        for (var i = 0; i < screens.length; i++) {
+            var screen = screens[i]
+            var monitor = null
+            try { monitor = Hyprland.monitorFor(screen) } catch (e) {}
+            if (!monitor)
+                continue
+
+            var mx = Number(monitor.x)
+            var my = Number(monitor.y)
+            var mw = Number(screen.width)
+            var mh = Number(screen.height)
+            if (!isFinite(mx) || !isFinite(my) || !isFinite(mw) || !isFinite(mh)
+                    || mw <= 0 || mh <= 0)
+                continue
+
+            var insideMonitor = x >= mx && x < mx + mw && y >= my && y < my + mh
+            if (!insideMonitor)
+                continue
+
+            if (edge === "bottom")
+                return y >= my + mh - thickness
+            if (edge === "left")
+                return x < mx + thickness
+            if (edge === "right")
+                return x >= mx + mw - thickness
+            return y < my + thickness
+        }
+        return false
+    }
+
+    function applyCursorPosition(raw) {
+        var match = String(raw || "").match(/^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/)
+        if (!match)
+            return
+        root.pointerOnBar = root.cursorOnBar(Number(match[1]), Number(match[2]))
+    }
+
+    Process {
+        id: cursorProbe
+        command: ["hyprctl", "cursorpos"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.applyCursorPosition(text)
+        }
+    }
+
+    Timer {
+        id: cursorPoll
+        interval: 80
+        repeat: true
+        running: root.config.enabled && root.config.revealOnHover && !root.paused
+        onTriggered: if (!cursorProbe.running) cursorProbe.running = true
+    }
 
     // ------------------------------------------------------------ attenuation
     //
@@ -174,18 +244,22 @@ Item {
     }
 
     // ------------------------------------------------------------------- idle
-    IdleMonitor {
-        id: idleMonitor
-        enabled: root.config.enabled && !root.paused
-        timeout: root.config.idleAfterSeconds
-        respectInhibitors: true
-        onIsIdleChanged: root.idle = isIdle
+    // Idle is bar-local: activity elsewhere on the desktop does not reset this
+    // timer. Passing the mouse over the bar starts the working state; after the
+    // configured interval without the mouse crossing the bar, deeper idle
+    // attenuation applies.
+    Timer {
+        id: barIdleTimer
+        interval: Math.max(5, Number(root.config.idleAfterSeconds)) * 1000
+        repeat: false
+        running: root.config.enabled && !root.paused && !root.barHovered && !root.idle
+        onTriggered: if (!root.barHovered) root.idle = true
     }
 
-    // The monitor is torn down while paused, and it is not guaranteed to
-    // report going un-idle on the way out. Without this a resume could snap
-    // straight to idleOpacity until the next keypress.
-    onPausedChanged: if (paused) idle = false
+    onBarHoveredChanged: if (barHovered) root.idle = false
+
+    onPausedChanged: if (paused) root.idle = false
+    onConfigChanged: root.idle = false
 
     // Rotating the checkerboard phase is what stops the pattern itself from
     // becoming the burn-in. Pointless in flat-dim mode, so it does not run.

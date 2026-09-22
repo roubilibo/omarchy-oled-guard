@@ -25,8 +25,8 @@ Holds a translucent veil over the bar strip, and only the bar strip.
 
 - **Continuous attenuation** (`baseOpacity`) — a standing reduction in how hard
   the bar's pixels are driven while you work.
-- **Idle attenuation** (`idleOpacity`) — deepens once there has been no input
-  for `idleAfterSeconds`, and lifts the instant you touch anything.
+- **Idle attenuation** (`idleOpacity`) — deepens once the mouse has not passed
+  over the bar for `idleAfterSeconds`, and lifts when it passes over again.
 - **Fullscreen suspend** — the veil lifts entirely when there is fullscreen
   content underneath. Dimming a film is a bug, not a feature. Decided per
   monitor, so a film on one screen is not veiled because another screen
@@ -177,10 +177,10 @@ Fullscreen counts as a reveal too, and uses the fast path: a film just started,
 and leaving a veil across the top of it for a second and a half is the bug the
 suspend exists to prevent.
 
-It costs nothing to implement and grabs no input: the bar already tracks its own
-hover state, and this plugin's overlay sits on top of it with an empty input
-region, so pointer events pass straight through to the bar underneath. No
-polling, no second hover surface, no click interception.
+It grabs no input: the plugin probes the global cursor against the live bar
+geometry, while its overlay sits on top with an empty input region, so pointer
+events pass straight through to the bar underneath. There is no second hover
+surface and no click interception.
 
 The **Veiled** depth preset (85% working, 90% idle) exists for this mode and is
 not really usable without it.
@@ -244,8 +244,8 @@ All keys are optional; the defaults below are what you get with an empty entry.
 
   "enabled": true,             // false disables without uninstalling
   "baseOpacity": 0.15,         // 0.0-0.9  standing attenuation while active
-  "idleOpacity": 0.5,          // 0.0-0.95 attenuation once idle
-  "idleAfterSeconds": 90,      // 5-3600
+  "idleOpacity": 0.5,          // 0.0-0.95 attenuation after mouse inactivity
+  "idleAfterSeconds": 90,      // 5-3600 seconds without mouse over the bar
   "fadeMs": 700,               // veiling back: gradual, so you never catch it
   "revealMs": 170,             // clearing: fast, it answers a gesture
 
@@ -262,12 +262,14 @@ All keys are optional; the defaults below are what you get with an empty entry.
 ```
 
 Installing it starts you at **Medium** — a 15% standing reduction that is easy
-to stop noticing, deepening to 55% when you go idle. A plugin whose job is to
+to stop noticing, deepening to 55% after 90 seconds without the mouse passing over the bar. A plugin whose job is to
 attenuate the bar should do that on install rather than sit inert until
 configured. One click on **Off** in the panel stops it entirely.
 
-Config changes hot-reload. Editing the plugin's `.js` requires
-`omarchy restart shell` (plugin code is cached, `.qml` and `.js` alike).
+Changes made through the panel or the `omarchy-shell oled.guard ...` commands
+apply to the widget, service and `shell.json` together; no shell restart is
+needed. Editing the plugin's source still requires `omarchy restart shell`
+because plugin code is cached.
 
 ## Bar indicator and panel
 

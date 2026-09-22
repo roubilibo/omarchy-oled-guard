@@ -108,9 +108,17 @@ Panel {
                 entry[key] = root.settings[key]
         for (var k in patch)
             entry[k] = patch[k]
-        root.settings = entry
+
+        // Use one complete snapshot for persistence and both live consumers.
+        // The service cannot observe the host's barConfig after startup, so
+        // sending the same entry explicitly keeps the transition atomic.
+        var persisted = false
         if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
-            root.bar.shell.updateEntryInline(root.moduleName, entry)
+            persisted = root.bar.shell.updateEntryInline(root.moduleName, entry)
+        root.settings = entry
+        if (root.service && typeof root.service.applyConfig === "function")
+            root.service.applyConfig(entry)
+        return persisted
     }
 
     function setPower(value) {
