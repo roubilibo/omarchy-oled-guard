@@ -1,17 +1,17 @@
-# OLED Guard
+# OLED Guard#
 
 An Omarchy plugin that reduces the status bar's luminance to help reduce OLED
 burn-in risk. The veil covers only the bar, does not intercept input, and lifts
 when the pointer reaches the bar or fullscreen content is active.
 
-![OLED Guard panel](preview.png)
+![OLED Guard# panel](preview.png)
 
 https://github.com/user-attachments/assets/f5d0a5c4-159d-4e98-a7a4-d4d4b6f55172
 
 ## Installation
 
 ```bash
-omarchy plugin add https://github.com/roubilibo/omarchy-oled-guard.git --enable
+omarchy plugin add https://github.com/roubilibo/omarchy-oled-guard-patch.git --enable
 omarchy restart shell
 ```
 

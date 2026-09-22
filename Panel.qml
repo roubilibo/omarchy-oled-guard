@@ -259,7 +259,7 @@ Panel {
         anchors.fill: parent
         bar: root.bar
         text: root.glyph
-        tooltipText: "OLED Guard — " + root.stateLine + " (" + root.activeLevelTooltip + ")"
+        tooltipText: "OLED Guard# — " + root.stateLine + " (" + root.activeLevelTooltip + ")"
         onPressed: function (b) {
             if (b === Qt.RightButton && root.service)
                 root.service.paused = !root.service.paused
@@ -307,7 +307,7 @@ Panel {
                         spacing: Style.space(2)
 
                         Text {
-                            text: "OLED Guard"
+                            text: "OLED Guard#"
                             color: root.bar ? root.bar.foreground : Color.foreground
                             font.family: Style.font.family
                             font.pixelSize: Style.font.body

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "roubilibo.oled-guard",
-  "name": "OLED Guard #Patch",
+  "name": "OLED Guard#",
   "version": "1.1.0",
   "author": "rawritude",
   "description": "Attenuates the always-on status bar strip so it stops out-wearing the rest of your OLED panel, and clears the moment you point at it.",
@@ -15,7 +15,7 @@
   },
   "barWidget": {
     "defaultSection": "right",
-    "displayName": "OLED Guard",
+    "displayName": "OLED Guard#",
     "description": "Panel-care status and protection level",
     "category": "System",
     "allowMultiple": false
