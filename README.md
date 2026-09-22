@@ -1,28 +1,28 @@
 # OLED Guard
 
-Omarchy plugin yang mengurangi luminance bar untuk membantu mengurangi risiko
-burn-in OLED. Veil hanya menutupi area bar, tidak mengambil input, dan otomatis
-terangkat saat pointer berada di bar atau saat konten fullscreen aktif.
+An Omarchy plugin that reduces the status bar's luminance to help reduce OLED
+burn-in risk. The veil covers only the bar, does not intercept input, and lifts
+when the pointer reaches the bar or fullscreen content is active.
 
 ![OLED Guard panel](preview.png)
 
-## Instalasi
+## Installation
 
 ```bash
 omarchy plugin add https://github.com/roubilibo/omarchy-oled-guard.git --enable
 omarchy restart shell
 ```
 
-Hapus plugin:
+Remove it with:
 
 ```bash
 omarchy plugin remove roubilibo.oled-guard
 ```
 
-## Konfigurasi
+## Configuration
 
-Entry plugin berada di `~/.config/omarchy/shell.json`. Preset dapat diubah
-langsung melalui `levels`; tooltip panel akan mengikuti angka terbaru.
+The plugin entry is stored in `~/.config/omarchy/shell.json`. Edit `levels` to
+tune each preset; panel tooltips use the latest values.
 
 ```jsonc
 {
@@ -50,31 +50,32 @@ langsung melalui `levels`; tooltip panel akan mengikuti angka terbaru.
 }
 ```
 
-`baseOpacity` dan `idleOpacity` lama tetap didukung untuk konfigurasi lama.
-Jika `level` digunakan, nilai di `levels` menjadi sumber utama.
+The legacy `baseOpacity` and `idleOpacity` keys are still supported. When
+`level` is set, the matching entry in `levels` is authoritative.
 
-Perubahan JSON diterapkan sebagai satu snapshot ke service, overlay, dan panel;
-tidak perlu restart shell. Restart hanya diperlukan setelah mengubah source
-plugin.
+JSON changes are applied as one snapshot to the service, overlay, and panel;
+no shell restart is required. Restart the shell only after changing plugin
+source files.
 
-### Arti idle
+### Idle behavior
 
-Idle berarti tidak ada pointer yang melewati bar selama `idleAfterSeconds`.
-Aktivitas mouse di luar bar tidak mereset timer ini. Default-nya 90 detik.
+Idle means that the pointer has not crossed the bar for `idleAfterSeconds`.
+Mouse activity outside the bar does not reset the timer. The default is 90
+seconds.
 
-### Mode
+### Modes
 
-- **Flat**: dimming merata dan paling efisien.
-- **Checker**: menambahkan tekstur checkerboard; rata-rata attenuation sama,
-  tetapi sedikit kurang efisien untuk wear.
-- **Reveal on hover**: veil dilepas saat pointer berada di area bar.
+- **Flat**: uniform dimming and the most efficient mode.
+- **Checker**: adds a rotating checkerboard texture; average attenuation stays
+  the same, but it is slightly less efficient for OLED wear.
+- **Reveal on hover**: clears the veil while the pointer is over the bar.
 
-## Panel dan perintah
+## Panel and commands
 
-Klik kiri icon untuk membuka panel. Klik kanan untuk pause/resume.
-Tooltip level menampilkan angka `working` dan `idle` dari konfigurasi aktif.
+Left-click the bar icon to open the panel. Right-click to pause or resume.
+Level tooltips show the configured `working` and `idle` percentages.
 
-Status service:
+Service status:
 
 ```bash
 omarchy-shell oledguard status
@@ -83,7 +84,7 @@ omarchy-shell oledguard resume
 omarchy-shell oledguard toggle
 ```
 
-Kontrol panel dan level:
+Panel and level controls:
 
 ```bash
 omarchy-shell roubilibo.oled-guard level off|light|medium|deep|veiled
@@ -94,13 +95,13 @@ omarchy-shell roubilibo.oled-guard toggle
 omarchy-shell roubilibo.oled-guard state
 ```
 
-Pause tidak disimpan ke JSON. Gunakan `"enabled": false` jika ingin
-menonaktifkan plugin secara permanen.
+Pause is not persisted. Set `"enabled": false` to disable the plugin
+persistently.
 
-## Persyaratan
+## Requirements
 
-Omarchy 4.x dengan shell berbasis Quickshell. Tidak ada dependency tambahan.
+Omarchy 4.x with the Quickshell-based shell. No additional dependencies.
 
-## Lisensi
+## License
 
 MIT
